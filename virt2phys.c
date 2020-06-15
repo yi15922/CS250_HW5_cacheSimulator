@@ -47,6 +47,7 @@ int main(int argc, char* argv[]){
     int padd = (ppn<<offsetBits) | offset;              // combine with offset
     printf("%x\n", padd);
 
+    fclose(theFile);
 
     return EXIT_SUCCESS;
 }

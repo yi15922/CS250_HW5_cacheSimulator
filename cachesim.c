@@ -14,7 +14,7 @@ int log2(int n) {
 
 typedef struct block{ 
     int tag;
-    int valid;
+    bool valid;
     clock_t time;
     char data[64];
 } block;
@@ -59,11 +59,13 @@ int main(int argc, char* argv[]){
     // Create the main memory of 16MB
     char* memory = (char*)malloc(16777216*sizeof(char)); 
 
-    block** cache = (block**)malloc(numSets*sizeof(block));
+    block** cache = (block**)malloc(numSets * sizeof(block*));
 
     for (int i = 0; i < numSets; i++){ 
         cache[i] = (block*)malloc(numWays * sizeof(block));
     }
+
+    //block cache[numSets][numWays];
 
 
 
@@ -78,20 +80,20 @@ int main(int argc, char* argv[]){
 
         int blockOffset = lowerBits(addr, offsetBits);
         int setIndex = lowerBits(addr<<offsetBits, indexBits);
-        int tag = deleteLowerBits(addr, 24-tagBits);
+        int tag = addr>>(24-tagBits);
 
         // Miss by default
         bool miss = 1;
 
         int validCount = 0;
 
-        block* blockToWrite; 
-        block* LRU = &cache[setIndex][0]; 
+        int wayToWrite; 
+        int LRU = 0; 
 
 
         //printf("Set %d, block offset %d, tag = %d\n", setIndex, blockOffset, tag);
 
-
+        //printf("%x, %d\n", addr, length);
         // If the instruction is a store
         if (!strcmp(type, "store")){ 
 
@@ -106,12 +108,10 @@ int main(int argc, char* argv[]){
 
             // Check all valid bits of set
             for (int way = 0; way < numWays; way++){ 
-                // If invalid check the next one
-                if (cache[setIndex][way].valid != 1){ 
-                    continue;
+                //printf("valid bit %d\n", cache[setIndex][way].valid);
 
-                // If valid check the tag
-                } else { 
+                // If invalid check the next one
+                if (cache[setIndex][way].valid ==1) { 
 
                     // Increment valid count
                     validCount += 1; 
@@ -121,9 +121,23 @@ int main(int argc, char* argv[]){
                         // Mark hit
                         miss = 0;
                         printf("hit\n");
+                        
+                        // Mark access time
+                        cache[setIndex][way].time = clock();
 
-                        // Set blockToWrite
-                        blockToWrite = &cache[setIndex][way];
+
+                        // Write tag
+                        //printf("Tag was %d\n", blockToWrite->tag);
+                        cache[setIndex][way].tag = tag;
+                        //printf("New tag %d\n", blockToWrite->tag);
+
+                        // Writing to the block from memory
+                        for (int byte = 0; byte < length; byte++){  
+
+                            // Write data from memory to block
+                            cache[setIndex][way].data[byte + blockOffset] = memory[addr+byte];
+                            //printf("%2hhx", blockToWrite->data[byte]);
+                        }
 
                         break;
 
@@ -132,50 +146,35 @@ int main(int argc, char* argv[]){
                 }
             }
 
-            // If not found at this point
+            // If not found at this point, don't write to block
             if (miss != 0) { 
                 printf("miss\n");
                 // Go through the set again to find free block
-                for (int way = 0; way < numWays; way++){
-                    if(cache[setIndex][way].valid == 0){ 
-                        blockToWrite = &cache[setIndex][way];
-                    } else { 
+            //     for (int way = 0; way < numWays; way++){
+            //         if(cache[setIndex][way].valid == 0){ 
+            //             blockToWrite = &cache[setIndex][way];
+            //         } else { 
 
-                        // Also keep track of the least recently used block
-                        if (cache[setIndex][way].time < LRU->time){ 
-                            LRU = &cache[setIndex][way];
-                        }
-                    }
-                }
+            //             // Also keep track of the least recently used block
+            //             if (cache[setIndex][way].time < LRU->time){ 
+            //                 LRU = &cache[setIndex][way];
+            //             }
+            //         }
+            //     }
             
 
-                // If all blocks are valid (no free block)
-                if (validCount == numWays){ 
+            //     // If all blocks are valid (no free block)
+            //     if (validCount == numWays){ 
 
-                    // Write to least recently used block
-                    blockToWrite = LRU;
-                }
+            //         // Write to least recently used block
+            //         blockToWrite = LRU;
+            //     }
                 
+            // }
+
+            
+            // If this was not a miss, write updated memory to block
             }
-
-            // Writing to the block from memory
-            for (int byte = 0; byte < length; byte++){  
-
-                // Mark access time
-                blockToWrite->time = clock();
-
-                // Mark as valid 
-                blockToWrite->valid = 1;
-
-                // Write tag
-                blockToWrite->tag = tag;
-
-                // Write data from memory to block
-                blockToWrite->data[byte] = memory[addr+byte];
-                //printf("%2hhx", blockToWrite->data[byte]);
-                
-            }
-
 
 
 
@@ -188,11 +187,7 @@ int main(int argc, char* argv[]){
             // Check all valid bits of set
             for (int way = 0; way < numWays; way++){ 
                 // If invalid check the next one
-                if (cache[setIndex][way].valid != 1){ 
-                    continue;
-
-                // If valid check the tag
-                } else { 
+                if (cache[setIndex][way].valid == 1) { 
                     // If tag matches 
                     if (cache[setIndex][way].tag == tag){ 
                         // Mark hit
@@ -203,7 +198,7 @@ int main(int argc, char* argv[]){
                         cache[setIndex][way].time = clock();
 
                         // Print data
-                        for (int byte = 0; byte < length; byte++){
+                        for (int byte = blockOffset; byte < length+blockOffset; byte++){
                             printf("%02hhx", cache[setIndex][way].data[byte]);
                         }
 
@@ -226,38 +221,42 @@ int main(int argc, char* argv[]){
                 // Go through the set again to find free block
                 for (int way = 0; way < numWays; way++){
                     if(cache[setIndex][way].valid == 0){ 
-                        blockToWrite = &cache[setIndex][way];
+                        wayToWrite = way;
+                        break;
+
                     } else { 
 
-                        // Also keep track of the least recently used block
-                        if (cache[setIndex][way].time < LRU->time){ 
-                            LRU = &cache[setIndex][way];
+                        // Also keep track of the least recently used block non-free block
+                        if (cache[setIndex][way].time < cache[setIndex][LRU].time){ 
+                            LRU = way;
                         }
                     }
                 }
 
-                // If all blocks are valid (no free block)
-                if (validCount == numWays){ 
 
+                // If all blocks are valid (no free block)
+
+                if (validCount == numWays){ 
                     // Write to least recently used block
-                    blockToWrite = LRU;
+                    wayToWrite = LRU;
                 }
+
+                // Mark access time
+                cache[setIndex][wayToWrite].time = clock();
+
+                // Mark as valid 
+                cache[setIndex][wayToWrite].valid = 1;
+                //printf("wrote valid bit %d\n", cache[setIndex][wayToWrite].valid);
+
+                // Write tag
+                cache[setIndex][wayToWrite].tag = tag;
 
                 // Writing to the block from memory
                 for (int byte = 0; byte < length; byte++){  
 
-                    // Mark access time
-                    blockToWrite->time = clock();
-
-                    // Mark as valid 
-                    blockToWrite->valid = 1;
-
-                    // Write tag
-                    blockToWrite->tag = tag;
-
                     // Write data from memory to block
-                    blockToWrite->data[byte] = memory[addr+byte];
-                    printf("%02hhx", blockToWrite->data[byte]);
+                    cache[setIndex][wayToWrite].data[byte + blockOffset] = memory[addr+byte];
+                    printf("%02hhx", cache[setIndex][wayToWrite].data[byte + blockOffset]);
                 }
                 printf("\n");
 

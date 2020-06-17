@@ -344,6 +344,13 @@ int main(int argc, char* argv[]){
         loopCount++;
     }
 
+    free(memory);
+
+    for (int i = 0; i < numSets; i++){ 
+        free(cache[i]);
+    }
+
+    free(cache);
     fclose(trace);
     return EXIT_SUCCESS;
 }

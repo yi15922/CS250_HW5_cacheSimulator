@@ -1,0 +1,14 @@
+Q1. Write-back caches are usually write-allocate because the data being written must necessarily exist in a cache block first before eventually being replaced and written to memory. 
+
+Q2. 1+0.1*(10)=2ns
+
+Q3. 
+a. 2^64/2^16=2^48 virtual pages
+b. 2^32/2^16=2^16 physical pages
+c. 48 bits of VPN mapped to 16 bits of PPN
+d. 16 bits
+e. 2^48*16=2^52
+f. A flat page table would be larger than the total available physical memory, which is impractical. Multilevel page tables divides a page table into hierarchies by having higher level page tables serve as index into lower level page tables, and the PPN is only 
+present at the lowest level of the tree. Each page table should fit inside a single page. This saves memory because the memory region for the PTEs no longer need to be contiguous, and page tables that do not contan any valid references to PPNs would simply not be 
+allocated, greatly reducing the amount of space required for PPNs. 
+g. A TLB miss does not necessarily mean a page fault because a TLB is a cache that does not contain the entire page table. A TLB miss will simply cause a memory access for the full page table for the PPN. 
